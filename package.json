@@ -1,0 +1,23 @@
+{
+  "name": "playable-file",
+  "version": "1.0.0",
+  "description": "HTML5 Playable Ad Mini Game Engine and minifier tool",
+  "main": "pack.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/virtualplaynl/playable-file.git"
+  },
+  "author": "Virtual Play",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/virtualplaynl/playable-file/issues"
+  },
+  "homepage": "https://github.com/virtualplaynl/playable-file#readme",
+  "dependencies": {
+    "mime-types": "^2.1.35",
+    "uglify-js": "^3.16.3"
+  }
+}
