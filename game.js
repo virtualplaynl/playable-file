@@ -17,16 +17,18 @@ function createGame()
 	whistle = new Sound("Whistle", 62);
 
 	let spr = new Sprite("Circle", [255, 0, 0]);
+	spr.onTapDown = button => {
+		spr.colorize(0, 255, 255);
+	};
+	spr.onTapUp = button => {
+		spr.colorize(255, 0, 0);
+	};
 	new GameObject("Circle", {x: 0, y: 50}, 0, .5, spr, new Rigidbody(), new CircleCollider(spr.width * .208));
 
-	spr = new Sprite("Circle", [0, 255, 0]);
-	new GameObject("Circle2", {x: -30, y: 100}, 0, .5 * .75, spr, new Rigidbody(false, 0.5), new CircleCollider(spr.width * .208 * .75));
-	spr = new Sprite("Circle", [0, 0, 255]);
-	new GameObject("Circle3", {x: 10, y: 200}, 0, .5 * 1.5, spr, new Rigidbody(false, 2), new CircleCollider(spr.width * .208 * 1.5));
-	spr = new Sprite("Circle", [255, 255, 0]);
-	new GameObject("Circle4", {x: -50, y: 150}, 0, .5 * .9, spr, new Rigidbody(false, 0.8), new CircleCollider(spr.width * .208 * .9));
-	spr = new Sprite("Circle", [255, 0, 255]);
-	new GameObject("Circle5", {x: 50, y: 100}, 0, .5 * 1.2, spr, new Rigidbody(false, 1.5), new CircleCollider(spr.width * .208 * 1.2));
+	new GameObject("Circle2", {x: -30, y: 100}, 0, .5 * .75, new Sprite("Circle", [0, 0, 255]), new Rigidbody(false, 0.5), new CircleCollider(spr.width * .208 * .75));
+	new GameObject("Circle3", {x: 10, y: 200}, 0, .5 * 1.5, new Sprite("Circle", [0, 255, 0]), new Rigidbody(false, 2), new CircleCollider(spr.width * .208 * 1.5));
+	new GameObject("Circle4", {x: -50, y: 150}, 0, .5 * .9, new Sprite("Circle", [255, 255, 0]), new Rigidbody(false, 0.8), new CircleCollider(spr.width * .208 * .9));
+	new GameObject("Circle5", {x: 50, y: 100}, 0, .5 * 1.2, new Sprite("Circle", [255, 0, 255]), new Rigidbody(false, 1.5), new CircleCollider(spr.width * .208 * 1.2));
 
 	new GameObject("Top", {x: 0, y: -250}, 0, {x: 100, y: .02}, new Sprite("Square"), new EdgeCollider("d"));
 	new GameObject("Bottom", {x: 0, y: 250}, 0, {x: 100, y: .02}, new Sprite("Square"), new EdgeCollider("u"));
@@ -36,12 +38,6 @@ function createGame()
 
 function updateGame(elapsed)
 {
-	if(mouse.leftDown) {
-		triangle.enabled = !triangle.enabled;
-	}
-	if(mouse.leftUp) {
-		square.enabled = !square.enabled;
-	}
 	if(mouse.rightDown) {
 		xylo.playNote(randomInt(56, 62));
 	}

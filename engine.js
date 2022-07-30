@@ -147,6 +147,19 @@ class GameObject
 		return null;
 	}
 
+	onTapDown(button)
+	{
+		this.components.forEach(component => component.onTapDown(button));
+	}
+	onTapDrag(button)
+	{
+		this.components.forEach(component => component.onTapDrag(button));
+	}
+	onTapUp(button)
+	{
+		this.components.forEach(component => component.onTapUp(button));
+	}
+
 	collisionEnter(collider)
 	{
 		this.components.forEach(component => component.collisionEnter(collider));
@@ -176,6 +189,9 @@ class Component
 	draw(){}
 	update(elapsed){}
 	lateUpdate(elapsed){}
+	onTapDown(button){}
+	onTapDrag(button){}
+	onTapUp(button){}
 	collisionEnter(collider){}
 	collisionStay(collider){}
 	collisionExit(collider){}
@@ -305,9 +321,9 @@ class Sprite extends Component
 		else this.colorize();
 	}
 
-	colorize()
+	colorize(r = this.color[0], g = this.color[1], b = this.color[2])
 	{
-		this.image = generateTintImage(this.rgbks, this.color[0], this.color[1], this.color[2]);
+		this.image = generateTintImage(this.rgbks, r, g, b);
 	}
 }
 
@@ -371,7 +387,7 @@ class Sound extends Component
 
 	prepare()
 	{
-		this.play(1.0, audioCtx.currentTime, 0, 0.001);
+		this.play(1.0, 1.0, audioCtx.currentTime, 0, 0.001);
 	}
 
 	playNote(note, volume = 1.0)
@@ -455,7 +471,7 @@ class Collider extends Component
 		colliders.push(this);
 	}
 
-	test(x, y) {}
+	test(point){}
 }
 
 class CircleCollider extends Collider
@@ -466,6 +482,10 @@ class CircleCollider extends Collider
 		this.radius = radius;
 	}
 
+	test(point)
+	{
+		return distance(this.object.position, point) <= this.radius;
+	}
 }
 
 // TODO
@@ -476,6 +496,12 @@ class BoxCollider extends Collider
 		super(isTrigger, bounce);
 		this.size = size;
 	}
+
+	test(point)
+	{
+		return false;
+		// TODO
+	}
 }
 
 class EdgeCollider extends Collider
@@ -484,6 +510,21 @@ class EdgeCollider extends Collider
 	{
 		super(isTrigger, bounce);
 		this.direction = direction;
+	}
+
+	test(point)
+	{
+		switch(this.direction)
+		{
+			case "u":
+				return point.y >= this.object.y;
+			case "d":
+				return point.y <= this.object.y;
+			case "l":
+				return point.x <= this.object.x;
+			case "r":
+				return point.x >= this.object.x;
+		}
 	}
 }
 
@@ -825,8 +866,8 @@ function openAdLink()
 }
 
 function mouseMove(evt) {
-	mouse.abs.x = evt.clientX;
-	mouse.abs.y = evt.clientY;
+	mouse.abs.x = evt.clientX * 2;
+	mouse.abs.y = evt.clientY * 2;
 	mouse.pos = mouse.abs.matrixTransform(camera.inverse);
 }
 
@@ -845,6 +886,12 @@ function mouseDown(evt)
 			mouse.rightPressed = true;
 			break;
 	}
+
+	colliders.forEach(collider => {
+		if(collider.test(mouse.pos)) {
+			collider.object.onTapDown(evt.button);
+		}
+	});
 }
 
 function mouseUp(evt)
@@ -861,10 +908,24 @@ function mouseUp(evt)
 			mouse.rightPressed = false;
 			break;
 	}
+
+	colliders.forEach(collider => {
+		if(collider.test(mouse.pos)) {
+			collider.object.onTapUp(evt.button);
+		}
+	});
 }
 
 function mouseOut(evt)
 {
+	if(mouse.leftPressed || mouse.rightPressed || mouse.middlePressed) {
+		colliders.forEach(collider => {
+			if(collider.test(mouse.pos)) {
+				collider.object.onTapUp(mouse.leftPressed ? 0 : mouse.rightPressed ? 2 : 1);
+			}
+		});
+	}
+
 	mouse.leftPressed = false;
 	mouse.middlePressed = false;
 	mouse.rightPressed = false;
@@ -891,6 +952,13 @@ function touchStart(evt)
 		if(simulateMouse && touches.length < 4) {
 			mouseMove({clientX: touches[0].x, clientY: touches[0].y});
 			mouseDown({button: touches.length - 1});
+		}
+		else {
+			colliders.forEach(collider => {
+				if(collider.test(touches[touches.length - 1])) {
+					collider.object.onTapDown(touches.length - 1);
+				}
+			});
 		}
 	}
 }
@@ -920,6 +988,13 @@ function touchEnd(evt)
 		if(match > -1) {
 			if(simulateMouse && touches[match].finger < 3) {
 				mouseUp({button: touches[match].finger});
+			}
+			else {
+				colliders.forEach(collider => {
+					if(collider.test(touches[match])) {
+						collider.object.onTapUp(touches[match].finger);
+					}
+				});
 			}
 			touches.splice(match, 1);
 		}
