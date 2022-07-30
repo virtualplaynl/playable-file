@@ -181,9 +181,97 @@ class Component
 	collisionExit(collider){}
 }
 
+function generateRGBKs(img, rgbI = 0, pixels = null, rgbks = [])
+{
+	let w = img.width;
+	let h = img.height;
+	if(pixels == null) {
+		let canvas = document.createElement("canvas");
+		canvas.width = w;
+		canvas.height = h;
+
+		let ctx = canvas.getContext("2d");
+		ctx.drawImage( img, 0, 0 );
+
+		pixels = ctx.getImageData( 0, 0, w, h ).data;
+
+		canvas.remove();
+	}
+
+	let canvas = document.createElement("canvas");
+	canvas.width  = w;
+	canvas.height = h;
+
+	let ctx = canvas.getContext('2d');
+	ctx.drawImage( img, 0, 0 );
+	let to = ctx.getImageData( 0, 0, w, h );
+	let toData = to.data;
+
+	for (
+		let i = 0, len = pixels.length;
+		i < len;
+		i += 4
+	) {
+		toData[i  ] = (rgbI === 0) ? pixels[i  ] : 0;
+		toData[i+1] = (rgbI === 1) ? pixels[i+1] : 0;
+		toData[i+2] = (rgbI === 2) ? pixels[i+2] : 0;
+		toData[i+3] =                pixels[i+3]    ;
+	}
+
+	ctx.putImageData( to, 0, 0 );
+
+	// image is _slightly_ faster then canvas for this, so convert
+	let imgComp = new Image();
+	imgComp.addEventListener("load", evt => {
+		canvas.remove();
+
+		rgbks.push( imgComp );
+
+		if(rgbks.length == 4) {
+			img.sprite.rgbks = rgbks;
+			img.sprite.colorize();
+		}
+		else generateRGBKs(img, rgbI+1, pixels, rgbks);
+	});
+	imgComp.src = canvas.toDataURL();
+}
+
+function generateTintImage(rgbks, red, green, blue)
+{
+	let buff = document.createElement( "canvas" );
+	buff.width  = rgbks[0].width;
+	buff.height = rgbks[0].height;
+
+	let ctx = buff.getContext("2d");
+
+	ctx.globalAlpha = 1;
+	ctx.globalCompositeOperation = 'copy';
+	ctx.drawImage( rgbks[3], 0, 0 );
+
+	ctx.globalCompositeOperation = 'lighter';
+	if ( red > 0 ) {
+		ctx.globalAlpha = red   / 255.0;
+		ctx.drawImage( rgbks[0], 0, 0 );
+	}
+	if ( green > 0 ) {
+		ctx.globalAlpha = green / 255.0;
+		ctx.drawImage( rgbks[1], 0, 0 );
+	}
+	if ( blue > 0 ) {
+		ctx.globalAlpha = blue  / 255.0;
+		ctx.drawImage( rgbks[2], 0, 0 );
+	}
+
+	let img = new Image();
+    img.src = buff.toDataURL();
+    buff.remove();
+
+	return img;
+}
+
 class Sprite extends Component
 {
-	constructor(imgName, gridX = 1, gridY = 1, index = 0)
+	constructor(imgName, color = undefined, gridX = 1, gridY = 1, index = 0)
 	{
 		super();
 		this.imgName = imgName;
@@ -191,6 +279,13 @@ class Sprite extends Component
 		this.gridY = gridY;
 		this.index = index;
 		this.image = preloaded.images[imgName];
+		if(color !== undefined) {
+			this.color = color;
+			this.image = new Image();
+			this.image.sprite = this;
+			this.image.addEventListener("load", evt => evt.srcElement.sprite.preColorize());
+			this.image.src = preloaded.images[imgName].src;
+		}
 		this.width = this.image.width / this.gridX;
 		this.height = this.image.height / this.gridY;
 		this.halfWidth = this.width / 2;
@@ -202,6 +297,17 @@ class Sprite extends Component
 	{
 		if(this.alpha < 1) ctx.globalAlpha = this.alpha;
 		ctx.drawImage(this.image, (this.index % this.gridX) * this.width, (this.index / this.gridX) * this.height, this.width, this.height, -this.halfWidth, -this.halfHeight, this.width, this.height);
+	}
+
+	preColorize()
+	{
+		if(this.rgbks == undefined) generateRGBKs(this.image);
+		else this.colorize();
+	}
+
+	colorize()
+	{
+		this.image = generateTintImage(this.rgbks, this.color[0], this.color[1], this.color[2]);
 	}
 }
 
