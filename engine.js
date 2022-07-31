@@ -1,10 +1,12 @@
 let canvas, ctx;
-let backgroundFill = "rgb(0,30,50)";
+let scaleFactor = window.devicePixelRatio;
+let backgroundFill = "rgb(0,15,50)";
 let width, height, hW, hH;
 let previousTime;
 let paused = true;
 
 const objects = [];
+let objID = 1;
 const componentsById = {};
 let compID = 1;
 
@@ -17,6 +19,8 @@ const activeSounds = [];
 let noteFrequency = [8.18,8.66,9.18,9.72,10.3,10.91,11.56,12.25,12.98,13.75,14.57,15.434,16.352,17.324,18.354,19.445,20.602,21.827,23.125,24.5,25.957,27.5,29.135,30.868,32.703,34.648,36.708,38.891,41.203,43.654,46.249,48.999,51.913,55,58.27,61.735,65.406,69.296,73.416,77.782,82.407,87.307,92.499,97.999,103.83,110,116.54,123.47,130.81,138.59,146.83,155.56,164.81,174.61,185,196,207.65,220,233.08,246.94,261.63,277.18,293.66,311.13,329.63,349.23,369.99,392,415.3,440,466.16,493.88,523.25,554.37,587.33,622.25,659.26,698.46,739.99,783.99,830.61,880,932.33,987.77,1046.5,1108.7,1174.7,1244.5,1318.5,1396.9,1480,1568,1661.2,1760,1864.7,1975.5,2093,2217.5,2349.3,2489,2637,2793.8,2960,3136,3322.4,3520,3729.3,3951.1,4186,4434.9,4698.6,4978,5274,5587.7,5919.9,6271.9,6644.9,7040,7458.6,7902.1,8372,8869.8,9397.3,9956.1,10548,11175,11840,12544,13290,14080,14917,15804,16744];
 const audioCtx = new AudioContext();
 
+let fixedStep = .01;
+let fixedNext = 0;
 let gravity = { x: 0, y: 9.81 };
 const colliders = [];
 const activeCollisions = {};
@@ -80,6 +84,7 @@ class GameObject
 {
 	constructor(name, position, rotation, scale, ...components)
 	{
+		this.id = objID++;
 		this.name = name;
 		this.enabled = true;
 		this.position = position;
@@ -88,8 +93,10 @@ class GameObject
 		this.absolute = false;
 		this.rigidbody = null;
 		this.components = [];
+		this.children = [];
+		this.parent = null;
 
-		components.forEach(component => this.add(component));
+		components.forEach(component => this.addComponent(component));
 
 		objects.push(this);
 	}
@@ -101,15 +108,25 @@ class GameObject
 			ctx.save();
 			if(this.absolute) {
 				ctx.resetTransform();
+				ctx.scale(scaleFactor, scaleFactor);
 			}
 			ctx.translate(this.position.x, this.position.y);
 			ctx.rotate(this.rotation);
 			if(isNaN(this.scale)) ctx.scale(this.scale.x, this.scale.y);
 			else ctx.scale(this.scale, this.scale);
 			this.components.forEach(component => {
-				ctx.save();
-				component.draw();
-				ctx.restore();
+				if(component.enabled) {
+					ctx.save();
+					component.draw();
+					ctx.restore();
+				}
+			});
+			this.children.forEach(child => {
+				if(child.enabled) {
+					ctx.save();
+					child.draw();
+					ctx.restore();
+				}
 			});
 			ctx.restore();
 		}
@@ -117,15 +134,35 @@ class GameObject
 
 	update(elapsed)
 	{
-		this.components.forEach(component => component.update(elapsed));
+		this.components.forEach(component => { if(component.enabled) component.update(elapsed); });
+		this.children.forEach(child => { if(child.enabled) child.update(elapsed); });
 	}
 
-	lateUpdate(elapsed)
+	fixedUpdate()
 	{
-		this.components.forEach(component => component.lateUpdate(elapsed));
+		this.components.forEach(component => { if(component.enabled) component.fixedUpdate(); });
+		this.children.forEach(child => { if(child.enabled) child.fixedUpdate(); });
 	}
 
-	add(component)
+	destroy(recursive = false)
+	{
+		this.components.forEach(component => component.destroy());
+		if(this.parent != null) parent.removeChild(this);
+		this.children.forEach(child => recursive ? child.destroy() : this.removeChild(child));
+		this.removeFromTop();
+	}
+
+	removeFromTop()
+	{
+		for (var i = objects.length - 1; i >= 0; i--) {
+			if(objects[i].id == this.id) {
+				objects.splice(i, 1);
+				return;
+			}
+		}
+	}
+
+	addComponent(component)
 	{
 		if(component instanceof Rigidbody) {
 			if(this.rigidbody != null) {
@@ -147,30 +184,59 @@ class GameObject
 		return null;
 	}
 
-	onTapDown(button)
+	removeComponent(component)
 	{
-		this.components.forEach(component => component.onTapDown(button));
+		for (var i = this.components.length - 1; i >= 0; i--) {
+			if(this.components[i].id == component.id) {
+				this.components.splice(i, 1);
+				component.destroy();
+				return true;
+			}
+		}
+		return false;
+	}
+
+	addChild(child)
+	{
+		this.children.push(child);
+		child.parent = this;
+		child.removeFromTop();
+	}
+
+	removeChild(child)
+	{
+		for (var i = this.children.length - 1; i >= 0; i--) {
+			if(this.children[i].id == child.id) {
+				this.children.splice(i, 1);
+				child.parent = null;
+				objects.push(child);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	onTap(button, down)
+	{
+		if(down) this.components.forEach(component => { if(component.enabled) component.onTapDown(button); });
+		else this.components.forEach(component => { if(component.enabled) component.onTapUp(button); });
 	}
 	onTapDrag(button)
 	{
-		this.components.forEach(component => component.onTapDrag(button));
-	}
-	onTapUp(button)
-	{
-		this.components.forEach(component => component.onTapUp(button));
+		this.components.forEach(component => { if(component.enabled) component.onTapDrag(button); });
 	}
 
 	collisionEnter(collider)
 	{
-		this.components.forEach(component => component.collisionEnter(collider));
+		this.components.forEach(component => { if(component.enabled) component.collisionEnter(collider); });
 	}
 	collisionStay(collider)
 	{
-		this.components.forEach(component => component.collisionStay(collider));
+		this.components.forEach(component => { if(component.enabled) component.collisionStay(collider); });
 	}
 	collisionExit(collider)
 	{
-		this.components.forEach(component => component.collisionExit(collider));
+		this.components.forEach(component => { if(component.enabled) component.collisionExit(collider); });
 	}
 
 	toString()
@@ -184,11 +250,18 @@ class Component
 	constructor()
 	{
 		this.id = compID++;
+		this.enabled = true;
 		componentsById[this.id] = this;
 	}
+	destroy()
+	{
+		delete componentsById[this.id];
+		this.onDestroy();
+	}
+	onDestroy(){}
 	draw(){}
 	update(elapsed){}
-	lateUpdate(elapsed){}
+	fixedUpdate(){}
 	onTapDown(button){}
 	onTapDrag(button){}
 	onTapUp(button){}
@@ -333,7 +406,7 @@ class Label extends Component
 	{
 		super();
 		this.text = text;
-		this.font = `${size} ${font}`;
+		this.font = `${size}px ${font}`;
 		this.size = size;
 		this.fill = fill;
 		this.shadow = shadow;
@@ -430,9 +503,9 @@ class Rotator extends Component
 		this.rpm = rpm;
 	}
 
-	update(elapsed)
+	fixedUpdate()
 	{
-		this.object.rotation += this.rpm * elapsed / piPerMin;
+		this.object.rotation += this.rpm * fixedStep / piPerMin;
 	}
 }
 
@@ -449,15 +522,15 @@ class Rigidbody extends Component
 		this.resting = {};
 	}
 
-	lateUpdate(elapsed)
+	fixedUpdate()
 	{
 		if(!this.kinematic) {
-			add_to_vector(this.velocity, scaled_vector(gravity, this.gravityMultiplier * elapsed));
-			if(this.dragFactor < 1) scale_vector(this.velocity, 1 - this.dragFactor * elapsed);
+			add_to_vector(this.velocity, scaled_vector(gravity, this.gravityMultiplier * fixedStep));
+			if(this.dragFactor < 1) scale_vector(this.velocity, 1 - this.dragFactor * fixedStep);
 		}
 
-		this.object.position.x += this.velocity.x * elapsed;
-		this.object.position.y += this.velocity.y * elapsed;
+		this.object.position.x += this.velocity.x * fixedStep;
+		this.object.position.y += this.velocity.y * fixedStep;
 	}
 }
 
@@ -528,7 +601,7 @@ class EdgeCollider extends Collider
 	}
 }
 
-function updatePhysics(elapsed)
+function updatePhysics()
 {
 	for(let aid in activeCollisions) {
 		for(let bid in activeCollisions[aid]) {
@@ -549,8 +622,8 @@ function updatePhysics(elapsed)
 	for(let aid in activeCollisions) {
 		for(let bid in activeCollisions[aid]) {
 			if(!activeCollisions[aid][bid].retain) {
-				componentsById[aid].object.collisionExit(componentsById[bid]);
-				componentsById[bid].object.collisionExit(componentsById[aid]);
+				if(componentsById[aid] !== undefined) componentsById[aid].object.collisionExit(bid);
+				if(componentsById[bid] !== undefined) componentsById[bid].object.collisionExit(aid);
 				delete activeCollisions[aid][bid];
 				if(Object.keys(activeCollisions[aid]).length == 0) {
 					delete activeCollisions[aid];
@@ -866,9 +939,13 @@ function openAdLink()
 }
 
 function mouseMove(evt) {
-	mouse.abs.x = evt.clientX * 2;
-	mouse.abs.y = evt.clientY * 2;
+	mouse.abs.x = evt.clientX * scaleFactor;
+	mouse.abs.y = evt.clientY * scaleFactor;
 	mouse.pos = mouse.abs.matrixTransform(camera.inverse);
+
+	if(mouse.leftPressed) drag(mouse.pos, 0);
+	else if(mouse.rightPressed) drag(mouse.pos, 2);
+	else if(mouse.middlePressed) drag(mouse.pos, 1);
 }
 
 function mouseDown(evt)
@@ -887,11 +964,7 @@ function mouseDown(evt)
 			break;
 	}
 
-	colliders.forEach(collider => {
-		if(collider.test(mouse.pos)) {
-			collider.object.onTapDown(evt.button);
-		}
-	});
+	tap(mouse.pos, true, evt.button);
 }
 
 function mouseUp(evt)
@@ -909,22 +982,14 @@ function mouseUp(evt)
 			break;
 	}
 
-	colliders.forEach(collider => {
-		if(collider.test(mouse.pos)) {
-			collider.object.onTapUp(evt.button);
-		}
-	});
+	tap(mouse.pos, false, evt.button);
 }
 
 function mouseOut(evt)
 {
-	if(mouse.leftPressed || mouse.rightPressed || mouse.middlePressed) {
-		colliders.forEach(collider => {
-			if(collider.test(mouse.pos)) {
-				collider.object.onTapUp(mouse.leftPressed ? 0 : mouse.rightPressed ? 2 : 1);
-			}
-		});
-	}
+	if(mouse.leftPressed) tap(mouse.pos, false, 0);
+	else if(mouse.rightPressed) tap(mouse.pos, false, 2);
+	else if(mouse.middlePressed) tap(mouse.pos, false, 1);
 
 	mouse.leftPressed = false;
 	mouse.middlePressed = false;
@@ -954,11 +1019,7 @@ function touchStart(evt)
 			mouseDown({button: touches.length - 1});
 		}
 		else {
-			colliders.forEach(collider => {
-				if(collider.test(touches[touches.length - 1])) {
-					collider.object.onTapDown(touches.length - 1);
-				}
-			});
+			tap(touches[touches.length - 1], true, touches.length - 1);
 		}
 	}
 }
@@ -975,6 +1036,9 @@ function touchMove(evt)
 			if(simulateMouse && touches[match].finger == 0) {
 				mouseMove({clientX: touches[match].x, clientY: touches[match].y});
 			}
+			else {
+				drag(touches[match])
+			}
 		}
 	}
 }
@@ -990,11 +1054,7 @@ function touchEnd(evt)
 				mouseUp({button: touches[match].finger});
 			}
 			else {
-				colliders.forEach(collider => {
-					if(collider.test(touches[match])) {
-						collider.object.onTapUp(touches[match].finger);
-					}
-				});
+				tap(touches[match], false, touches[match].finger);
 			}
 			touches.splice(match, 1);
 		}
@@ -1004,6 +1064,20 @@ function touchEnd(evt)
 function touchCancel(evt)
 {
 	touchEnd(evt);
+}
+
+function tap(position, down, button)
+{
+	colliders.forEach(collider => {
+		if(collider.test(position)) {
+			collider.object.onTap(button, down);
+		}
+	});
+}
+
+function drag(position, button)
+{
+
 }
 
 function mraidReady() {
@@ -1074,8 +1148,14 @@ function loop(timestamp)
 		{
 			updateGame(elapsed);
 			objects.forEach(o => { if(o.enabled) o.update(elapsed); });
-			updatePhysics(elapsed);
-			objects.forEach(o => { if(o.enabled) o.lateUpdate(elapsed); });
+
+			fixedNext += elapsed;
+			while(fixedNext > fixedStep)
+			{
+				fixedNext -= fixedStep;
+				updatePhysics();
+				objects.forEach(o => { if(o.enabled) o.fixedUpdate(); });
+			}
 		}
 
 		/* draw objects */
@@ -1103,8 +1183,8 @@ function resized(w = 0, h = 0)
 		width = w;
 		height = h;
 	}
-	width *= 2;
-	height *= 2;
+	width *= scaleFactor;
+	height *= scaleFactor;
 	canvas.width = width;
 	canvas.height = height;
 	canvas.style.width = "100%";
@@ -1117,10 +1197,10 @@ function resized(w = 0, h = 0)
 let fps = 60;
 function addFpsLabel(size = 20)
 {
-	let fpsLabel = new Label("0 FPS", "Arial", `${size}px`, "yellow", 0);
+	let fpsLabel = new Label("0 FPS", "Arial", size, "yellow", 0);
 	fpsLabel.align = "left";
 	fpsLabel.baseline = "top";
-	fpsDisplay = new GameObject("FPS Display", {x: size / 2, y: size * 2}, 0, 1, fpsLabel);
+	fpsDisplay = new GameObject("FPS Display", {x: size, y: size * 2}, 0, 1, fpsLabel);
 	fpsDisplay.absolute = true;
 	fpsDisplay.update = function(elapsed)
 	{
