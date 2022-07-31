@@ -3,6 +3,7 @@ const DEBUG = true;
 const fs = require("fs");
 const path = require('path');
 const UglifyJS = require("uglify-js");
+const htmlminify = require('html-minifier').minify;
 const mime = require('mime-types');
 
 if(process.argv.length != 3) {
@@ -11,6 +12,10 @@ if(process.argv.length != 3) {
 }
 
 const outputFile = process.argv[2];
+
+const uicss = fs.readFileSync("ui.css", "utf8");
+const uicode = "<style>" + uicss + "</style>" + fs.readFileSync("ui.html", "utf8");
+const minifiedui = htmlminify(uicode);
 
 const code = fs.readFileSync("engine.js", "utf8") + fs.readFileSync("game.js", "utf8");
 const minified = UglifyJS.minify(code, { mangle: { toplevel: true, reserved: ["initAd", "resized"] } });
@@ -56,7 +61,7 @@ files.forEach(function (filename) {
 	}
 });
 
-const output = fs.readFileSync("boilerplate.html", "utf8").replace("JSCODE", DEBUG ? code : minified.code).replace("RESOURCES", resources);
+const output = fs.readFileSync("boilerplate.html", "utf8").replace("UI", minifiedui).replace("JSCODE", DEBUG ? code : minified.code).replace("RESOURCES", resources);
 
 try {
 	fs.writeFileSync(outputFile, output);

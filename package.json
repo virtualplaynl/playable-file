@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/virtualplaynl/playable-file#readme",
   "dependencies": {
+    "html-minifier": "^4.0.0",
     "mime-types": "^2.1.35",
     "uglify-js": "^3.16.3"
   }

@@ -74,6 +74,10 @@ const mouse = {
 };
 
 
+function randomFloat(min, max) {
+    return (Math.random() * (max - min)) + min;
+}
+
 function randomInt(min, max) {
     min = Math.ceil(min);
     max = Math.floor(max) - 1;
@@ -98,7 +102,7 @@ class GameObject
 
 		components.forEach(component => this.addComponent(component));
 
-		objects.push(this);
+		if(name != "FPS_Display") objects.push(this);
 	}
 
 	draw()
@@ -880,6 +884,8 @@ function startAd()
 		if(platform == "a" && androidLink == "") alert("Warning: Android link not set");
 		else if(platform == "i" && iosLink == "") alert("Warning: iOS link not set");
 
+		ui.style.display = "block";
+
 		loop();
 	}
 }
@@ -1148,6 +1154,7 @@ function loop(timestamp)
 		{
 			updateGame(elapsed);
 			objects.forEach(o => { if(o.enabled) o.update(elapsed); });
+			if(fpsDisplay) fpsDisplay.update(elapsed);
 
 			fixedNext += elapsed;
 			while(fixedNext > fixedStep)
@@ -1165,6 +1172,7 @@ function loop(timestamp)
 
 		ctx.setTransform(camera.transform);
 		objects.forEach(o => { if(o.enabled) o.draw(elapsed); });
+		if(fpsDisplay) fpsDisplay.draw(elapsed);
 	}
 
 
@@ -1197,10 +1205,10 @@ function resized(w = 0, h = 0)
 let fps = 60;
 function addFpsLabel(size = 20)
 {
-	let fpsLabel = new Label("0 FPS", "Arial", size, "yellow", 0);
+	let fpsLabel = new Label("0 FPS", "Arial", size, "yellow", 2);
 	fpsLabel.align = "left";
 	fpsLabel.baseline = "top";
-	fpsDisplay = new GameObject("FPS Display", {x: size, y: size * 2}, 0, 1, fpsLabel);
+	fpsDisplay = new GameObject("FPS_Display", {x: size, y: size * 2}, 0, 1, fpsLabel);
 	fpsDisplay.absolute = true;
 	fpsDisplay.update = function(elapsed)
 	{
